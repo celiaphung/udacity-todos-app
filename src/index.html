@@ -7,6 +7,7 @@
     <script src="https://unpkg.com/react@16.3.0-alpha.1/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@16.3.0-alpha.1/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+    <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
 </head>
 
 <body>
@@ -77,6 +78,7 @@
         const TOGGLE_TODO = 'TOGGLE_TODO'
         const ADD_GOAL = 'ADD_GOAL'
         const REMOVE_GOAL = 'REMOVE_GOAL'
+        const RECEIVE_DATA = 'RECEIVE_DATA'
 
         //Action creator
         function addTodoAction(todo) {
@@ -110,6 +112,14 @@
             }
         }
 
+        function receiveDataAction(todos, goals) {
+            return {
+                type: RECEIVE_DATA,
+                todos,
+                goals
+            }
+        }
+
         //Reducer
         function todos(state = [], action) {
             //1. Only an event can change the state of the store
@@ -123,18 +133,32 @@
                 case TOGGLE_TODO:
                     return state.map((todo) => todo.id !== action.id ? todo :
                         Object.assign({}, todo, { complete: !todo.complete }))
+                case RECEIVE_DATA:
+                    return action.todos
                 //Can't modify the original object (To be pure) -> Use Object.assign to create a new object 
                 //then merge all the properties on todo (todo object) to that object except for complete
                 default:
                     return state
             }
         }
+
         function goals(state = [], action) {
             switch (action.type) {
                 case ADD_GOAL:
                     return state.concat([action.goal])
                 case REMOVE_GOAL:
                     return state.filter((goal) => goal.id !== action.id)
+                case RECEIVE_DATA:
+                    return action.goals
+                default:
+                    return state
+            }
+        }
+
+        function loading(state = true, action) {
+            switch (action.type) {
+                case RECEIVE_DATA:
+                    return false
                 default:
                     return state
             }
@@ -178,7 +202,8 @@
 
         const store = Redux.createStore(Redux.combineReducers({
             todos,
-            goals
+            goals,
+            loading
         }), Redux.applyMiddleware(checker, logger))
 
         // store.subscribe(() => {
@@ -308,22 +333,40 @@
         }
 
         class Todos extends React.Component {
+            //Not doing optimistic updates bc the id is being generated on the server
             addItem = (e) => {
                 e.preventDefault()
-                const name = this.input.value
-                this.input.value = ''
 
-                this.props.store.dispatch(addTodoAction({
-                    name,
-                    complete: false,
-                    id: generateId()
-                }))
+                return API.saveTodo(this.input.value)
+                    .then((todo) => {
+                        this.props.store.dispatch(addTodoAction(todo))
+                        this.input.value = ''
+                    })
+                    .catch(() => {
+                        alert('There was an error. Try again.')
+                    })
             }
+
+            //Optimistic Updates - delete item first while the request is asychronous then send error feedback if there's any
             removeItem = (todo) => {
                 this.props.store.dispatch(removeTodoAction(todo.id))
+
+                return API.deleteTodo(todo.id)
+                    //Catch an error and return a feedback to the user
+                    .catch(() => {
+                        this.props.store.dispatch(addTodoAction(todo))
+                        alert('An error occurred. Try again.')
+                    })
+
             }
             toggleItem = (id) => {
                 this.props.store.dispatch(toggleTodoAction(id))
+
+                return API.saveTodoToggle(id)
+                    .catch(() => {
+                        this.props.store.dispatch(toggleTodoAction(id))
+                        alert('An erorr occurred. Try again.')
+                    })
             }
             render() {
                 return (
@@ -348,17 +391,28 @@
         class Goals extends React.Component {
             addItem = (e) => {
                 e.preventDefault()
-                const name = this.input.value
-                this.input.value = ''
 
-                this.props.store.dispatch(addGoalAction({
-                    id: generateId(),
-                    name
-                }))
+                return API.saveGoal(this.input.value)
+                    .then((goal) => {
+                        this.props.store.dispatch(addGoalAction(goal))
+                        this.input.value = ''
+                    })
+                    .catch(() => {
+                        alert('There was an error. Try again.')
+                    })
             }
+
+            //Opstimistic Updates
             removeItem = (goal) => {
                 this.props.store.dispatch(removeGoalAction(goal.id))
+
+                return API.deleteGoal(goal.id)
+                    .catch(() => {
+                        this.props.store.dispatch(addGoalAction(goal))
+                        alert('An error occurred. Try again.')
+                    })
             }
+
             render() {
                 return (
                     <div>
@@ -384,10 +438,23 @@
                 const { store } = this.props
 
                 store.subscribe(() => this.forceUpdate())
+
+                Promise.all([
+                    API.fetchTodos(),
+                    API.fetchGoals()
+                ]).then(([todos, goals]) => {
+                    store.dispatch(receiveDataAction(todos, goals))
+                })
             }
+
             render() {
                 const { store } = this.props
-                const { todos, goals } = store.getState() //getting states from store to pass them into components
+                const { todos, goals, loading } = store.getState() //getting states from store to pass them into components
+
+                if (loading === true) {
+                    return <h3>Loading</h3>
+                }
+
                 return (
                     <div>
                         <Todos todos={todos} store={this.props.store} />
