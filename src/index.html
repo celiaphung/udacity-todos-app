@@ -247,7 +247,7 @@
             todos,
             goals,
             loading
-        }), Redux.applyMiddleware(checker, logger, ReduxThunk.default))
+        }), Redux.applyMiddleware(ReduxThunk.default, checker, logger))
         //Thunk middleware - support thunk action creators
         //Dispatch only when a request is resolved!
     </script>
