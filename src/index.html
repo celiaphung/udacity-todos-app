@@ -273,11 +273,12 @@
             )
         }
 
+
         class Todos extends React.Component {
             //Not doing optimistic updates bc the id is being generated on the server
             addItem = (e) => {
                 e.preventDefault()
-                this.props.store.dispatch(handleAddTodo(
+                this.props.dispatch(handleAddTodo(
                     this.input.value,
                     () => this.input.value = ''
                 ))
@@ -286,11 +287,11 @@
             //Optimistic Updates - delete item first while the request is asychronous then send error feedback if there's any
             //Check Optimisitc Updates commit on github
             removeItem = (todo) => {
-                this.props.store.dispatch(handleDeleteTodo(todo))
+                this.props.dispatch(handleDeleteTodo(todo))
             }
 
             toggleItem = (id) => {
-                this.props.store.dispatch(handleToggleTodo(id))
+                this.props.dispatch(handleToggleTodo(id))
             }
 
             render() {
@@ -313,10 +314,25 @@
             }
         }
 
+
+        class ConnectedTodos extends React.Component {
+            render() {
+                return (
+                    <Context.Consumer>
+                        {(store) => {
+                            const { todos } = store.getState()
+
+                            return <Todos todos={todos} dispatch={store.dispatch} />
+                        }}
+                    </Context.Consumer>
+                )
+            }
+        }
+
         class Goals extends React.Component {
             addItem = (e) => {
                 e.preventDefault()
-                this.props.store.dispatch(handleAddGoal(
+                this.props.dispatch(handleAddGoal(
                     this.input.value,
                     () => this.input.value = ''
                 ))
@@ -324,7 +340,7 @@
 
             //Opstimistic Updates
             removeItem = (goal) => {
-                this.props.store.dispatch(handleDeleteGoal(goal))
+                this.props.dispatch(handleDeleteGoal(goal))
             }
 
             render() {
@@ -338,11 +354,27 @@
                         />
                         <button onClick={this.addItem}>Add Goal</button>
 
+                        <ConnectedApp />
                         <List
                             items={this.props.goals}
                             remove={this.removeItem}
                         />
                     </div>
+                )
+            }
+        }
+
+        class ConnectedGoals extends React.Component {
+            render() {
+                return (
+                    <Context.Consumer>
+                        {(store) => {
+                            const { goals } = store.getState()
+
+                            return <Goals goals={goals} dispatch={store.dispatch} />
+                        }
+                        }
+                    </Context.Consumer>
                 )
             }
         }
@@ -358,7 +390,7 @@
 
             render() {
                 const { store } = this.props
-                const { todos, goals, loading } = store.getState() //getting states from store to pass them into components
+                const { loading } = store.getState() //getting states from store to pass them into components
 
                 if (loading === true) {
                     return <h3>Loading</h3>
@@ -366,15 +398,50 @@
 
                 return (
                     <div>
-                        <Todos todos={todos} store={this.props.store} />
-                        <Goals goals={goals} store={this.props.store} />
+                        <ConnectedTodos />
+                        <ConnectedGoals />
                     </div>
                 )
             }
         }
 
+        //Container/Connected component - is connected to the store
+        //Not responsible for rendering UI content - Presentational Component
+        //Used bc the store is needed in componentDidMount(), not just render()
+        //3. Abstraction over Context.Consumer
+        class ConnectedApp extends React.Component {
+            render() {
+                return (
+                    <Context.Consumer>
+                        {(store) => (
+                            //a. Render any component e.g. App
+                            //b. Pass that component any data it needs from the store e.g. store
+                            <App store={store} />
+                        )}
+                    </Context.Consumer>
+                )
+            }
+        }
+
+        //1. Create Context object -> has provider and consumer properties
+        const Context = React.createContext()
+
+        //2. Abstraction over Context.Provider - used where the data is held
+        class Provider extends React.Component {
+            render() {
+                return (
+                    <Context.Provider value={this.props.store}>
+                        {this.props.children}
+                    </Context.Provider>
+                )
+            }
+        }
+
         ReactDOM.render(
-            <App store={store} />,
+            //3. Using Provider component
+            <Provider store={store}>
+                <ConnectedApp />
+            </Provider>,
             document.getElementById('app')
         )
 
