@@ -3,33 +3,33 @@
 
 <head>
     <title>Udacity Todos Goals</title>
+    <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/redux/3.7.2/redux.min.js"></script>
     <script src="https://unpkg.com/react@16.3.0-alpha.1/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@16.3.0-alpha.1/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
     <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
     <script src="https://unpkg.com/redux-thunk@2.2.0/dist/redux-thunk.min.js"></script>
 </head>
 
 <body>
     <!-- <div>
-        <h1>Todo List</h1>
-        <input id='todo' type='text' placeholder="Add Todo" />
-        <button id='todoBtn'>Add Todo</button>
-        <ul id='todos'>
+            <h1>Todo List</h1>
+            <input id='todo' type='text' placeholder="Add Todo" />
+            <button id='todoBtn'>Add Todo</button>
+            <ul id='todos'>
 
-        </ul>
-    </div>
-    <div>
-        <h1>Goals List</h1>
-        <input id='goal' type='text' placeholder="Add Goal" />
-        <button id='goalBtn'>Add Goal</button>
-        <ul id='goals'>
+            </ul>
+        </div>
+        <div>
+            <h1>Goals List</h1>
+            <input id='goal' type='text' placeholder="Add Goal" />
+            <button id='goalBtn'>Add Goal</button>
+            <ul id='goals'>
 
-        </ul>
-    </div>
+            </ul>
+        </div>
 
-    <hr /> -->
+        <hr /> -->
 
     <div id='app'></div>
 
@@ -82,7 +82,7 @@
             return {
                 type: RECEIVE_DATA,
                 todos,
-                goals
+                goals,
             }
         }
 
@@ -248,8 +248,8 @@
             goals,
             loading
         }), Redux.applyMiddleware(ReduxThunk.default, checker, logger))
-        //Thunk middleware - support thunk action creators
-        //Dispatch only when a request is resolved!
+            //Thunk middleware - support thunk action creators
+            //Dispatch only when a request is resolved!
     </script>
 
     <script type='text/babel'>
@@ -266,13 +266,12 @@
                             </span>
                             <button onClick={() => props.remove(item)}>
                                 X
-                            </button>
+                                </button>
                         </li>
                     ))}
                 </ul>
             )
         }
-
 
         class Todos extends React.Component {
             //Not doing optimistic updates bc the id is being generated on the server
@@ -314,20 +313,9 @@
             }
         }
 
-
-        class ConnectedTodos extends React.Component {
-            render() {
-                return (
-                    <Context.Consumer>
-                        {(store) => {
-                            const { todos } = store.getState()
-
-                            return <Todos todos={todos} dispatch={store.dispatch} />
-                        }}
-                    </Context.Consumer>
-                )
-            }
-        }
+        const ConnectedTodos = connect((state) => ({
+            todos: state.todos
+        }))(Todos)
 
         class Goals extends React.Component {
             addItem = (e) => {
@@ -354,7 +342,6 @@
                         />
                         <button onClick={this.addItem}>Add Goal</button>
 
-                        <ConnectedApp />
                         <List
                             items={this.props.goals}
                             remove={this.removeItem}
@@ -364,35 +351,18 @@
             }
         }
 
-        class ConnectedGoals extends React.Component {
-            render() {
-                return (
-                    <Context.Consumer>
-                        {(store) => {
-                            const { goals } = store.getState()
-
-                            return <Goals goals={goals} dispatch={store.dispatch} />
-                        }
-                        }
-                    </Context.Consumer>
-                )
-            }
-        }
+        const ConnectedGoals = connect((state) => ({
+            goals: state.goals
+        }))(Goals)
 
         class App extends React.Component {
             componentDidMount() {
-                const { store } = this.props
-
-                store.dispatch(handleInitialData())
-
-                store.subscribe(() => this.forceUpdate())
+                const { dispatch } = this.props
+                dispatch(handleInitialData())
             }
 
             render() {
-                const { store } = this.props
-                const { loading } = store.getState() //getting states from store to pass them into components
-
-                if (loading === true) {
+                if (this.props.loading === true) {
                     return <h3>Loading</h3>
                 }
 
@@ -408,23 +378,57 @@
         //Container/Connected component - is connected to the store
         //Not responsible for rendering UI content - Presentational Component
         //Used bc the store is needed in componentDidMount(), not just render()
-        //3. Abstraction over Context.Consumer
-        class ConnectedApp extends React.Component {
-            render() {
-                return (
-                    <Context.Consumer>
-                        {(store) => (
-                            //a. Render any component e.g. App
-                            //b. Pass that component any data it needs from the store e.g. store
-                            <App store={store} />
-                        )}
-                    </Context.Consumer>
-                )
-            }
-        }
+
+        //Wrap ConnectedApp's functionality inside connect() - check history for ConnectedApp's component
+        //connect() contains a component that is rendered and the data that the component needs - using a function to pass data as props
+        const ConnectedApp = connect((state) => ({
+            loading: state.loading
+        }))(App)
+
 
         //1. Create Context object -> has provider and consumer properties
         const Context = React.createContext()
+
+        //Helper function
+        //3 things needed to know before creating connect() - Comments inside function
+        function connect(mapStateToProps) {
+            return (Component) => {
+                class Receiver extends React.Component {
+                    //store.subscribe
+                    componentDidMount() {
+                        const { subscribe } = this.props.store
+
+                        this.unsubscribe = subscribe(() => {
+                            this.forceUpdate()
+                        })
+                    }
+
+                    componentWillUnmount() {
+                        this.unsubscribe()
+                    }
+                    render() {
+                        //What state is needed
+                        const { dispatch, getState } = this.props.store
+                        const state = getState()
+                        const stateNeeded = mapStateToProps(state)
+
+                        return <Component {...stateNeeded} dispatch={dispatch} />
+                    }
+                }
+                class ConnectedComponent extends React.Component {
+                    render() {
+                        return (
+                            //Connect to Context
+                            <Context.Consumer>
+                                {(store) => <Receiver store={store} />}
+                            </Context.Consumer>
+                        )
+                    }
+                }
+
+                return ConnectedComponent
+            }
+        }
 
         //2. Abstraction over Context.Provider - used where the data is held
         class Provider extends React.Component {
